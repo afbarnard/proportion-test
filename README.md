@@ -18,12 +18,12 @@ evaluating rules in Aleph (an inductive logic programming (ILP) system,
 which is a rule learning system for supervised machine learning tasks).
 Basically, a rule is evaluated based on how many positive (correct)
 examples it covers (#p) versus how many negative (false) examples it
-covers (#n).  The standard way to score a rule is the difference #p -
-#n.  Another way to assess a rule, and what I was researching, was to
-test the proportion #p / (#p + #n) against some expected prior like 1/2
-or 1/10.  Aleph is implemented in Prolog and typically runs on Yap, so a
-Prolog implementation of these statistical tests was needed (and could
-not be found) and thus this code was born.
+covers (#n).  The standard way to score a rule is the difference #p-#n.
+Another way to assess a rule, and what I was researching, was to test
+the proportion #p/(#p+#n) against some expected prior like 1/2 or 1/10.
+Aleph is implemented in Prolog and typically runs on Yap, so a Prolog
+implementation of these statistical tests was needed (and could not be
+found) and thus this code was born.
 
 If this sounds like interesting research, let me know.  With the right
 data, there's probably a paper in this somewhere.
