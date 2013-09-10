@@ -1,0 +1,200 @@
+% Copyright (c) 2010 Aubrey Barnard.  This is free software.  See
+% LICENSE for details.
+
+% Implementation of xUnit unit testing for Prolog, Yap in particular.
+
+% TODO JUnit-like console runner
+% TODO automatically extract and run tests given file/module
+
+% Declare the interface of this module
+:- module(unittest, [
+    runTest/2,
+    runTest/1,
+    runTests/3,
+    runTests/1,
+    fail/1,
+    fail/2,
+    assertTrue/2,
+    assertTrue/1,
+    assertFalse/2,
+    assertFalse/1,
+    assertEqual/3,
+    assertEqual/2
+]).
+
+% Imports
+:- use_module(library(lists)).
+:- use_module(library(charsio)).
+
+% Have unknown predicates result in an error. Helps with testing!
+:- yap_flag(unknown, error).
+
+% Runs the named test, returning the result, and printing it or not
+runTest(print, Test, Result) :-
+    write(Test), write(': '),
+    runTest(noprint, Test, Result),
+    Result = result(Type, Message),
+    (Type = pass ->
+        write('ok')
+    ;
+        (Type = fail ->
+            write('FAIL: ')
+        ;
+            write('ERROR: ')),
+        writeq(Message)),
+    nl.
+runTest(noprint, Test, Result) :-
+    catch((Test ->
+                Result = result(pass, none)
+            ;
+                Result = result(fail, 'Goal failed.')),
+        Exception,
+        runTestHandleException(Exception, Result)).
+runTestHandleException(error(assertion(Message)), result(fail, Message)).
+runTestHandleException(Exception, result(error, Exception)).
+
+
+% Runs the named test, returning the result
+runTest(Test, Result) :-
+    runTest(noprint, Test, Result).
+
+% Runs the named test, printing the result
+runTest(Test) :-
+    runTest(print, Test, _).
+
+% Runs all the named tests, returning the result, and printing results
+% or not. Works for arbitrarily nested lists of tests. Returns a list of
+% results and the overall score.
+runTests(Print, Tests, Results, Scores) :-
+    qualifiedPredicates(Tests, QualifiedTests),
+    runTestsSub(Print, QualifiedTests, [], ReversedResults, [0/0], ReversedScores),
+    reverse(ReversedResults, Results),
+    reverse(ReversedScores, Scores).
+runTestsSub(print, [], Results, Results, Scores, Scores) :-
+    Scores = [Correct / Total | _],
+    write('Tests Passed: '), write(Correct), write(' / '), write(Total), nl.
+runTestsSub(noprint, [], Results, Results, Scores, Scores).
+runTestsSub(Print, [Tests1 | Tests2], Results, ReturnResults, Scores, ReturnScores) :-
+    is_list(Tests1),
+    runTestsSub(Print, Tests1, [], NewResults, [0/0], NewScore),
+    runTestsSub(Print, Tests2, [NewResults | Results], ReturnResults, [NewScore | Scores], ReturnScores).
+runTestsSub(Print, [Test | Tests], Results, ReturnResults, [Score | Scores], ReturnScores) :-
+    runTest(Print, Test, Result),
+    Score = OldCorrect / OldTotal,
+    Result = result(Type, Message),
+    (Type = pass ->
+        NewCorrect is OldCorrect + 1
+    ;
+        NewCorrect = OldCorrect),
+    NewTotal is OldTotal + 1,
+    NewScore = NewCorrect / NewTotal,
+    runTestsSub(Print, Tests, [Test-Result | Results], ReturnResults, [NewScore | Scores], ReturnScores).
+
+% Runs all the named tests, returning results
+runTests(Tests, Results, Scores) :-
+    runTests(noprint, Tests, Results, Scores).
+
+% Runs all the named tests, printing results
+runTests(Tests) :-
+    runTests(print, Tests, _, _).
+
+% Adds the module name onto the predicate name
+qualifiedPredicates([], []).
+qualifiedPredicates([ModulePred | Preds], [ModulePred | ModulePreds]) :-
+    ModulePred = _ : _,
+    qualifiedPredicates(Preds, ModulePreds).
+qualifiedPredicates([Pred | Preds], [ModulePred | ModulePreds]) :-
+    ModulePred = user : Pred,
+    qualifiedPredicates(Preds, ModulePreds).
+
+
+% Assertions
+
+% Fail with the given message
+fail(Message) :-
+    atom(Message),
+    throw(error(assertion(Message))).
+fail(Message) :-
+    is_list(Message),
+    % Convert the string to an atom
+    name(AtomMessage, Message),
+    fail(AtomMessage).
+
+%% Fail generating a message from the given terms.
+%fail(Expected, Actual) :-
+%    % Build default message
+%    format_to_chars("Expected: ~q Actual: ~q", [Expected, Actual], Message),
+%    fail(Message).
+
+
+% Assert that the goal succeeds, reporting the given message if it fails.
+assertTrue(Goal, Message) :-
+    call(Goal),
+    !.
+assertTrue(_, Message) :-
+    fail(Message).
+
+% Assert that the goal succeeds, reporting a default message if it fails.
+assertTrue(Goal) :-
+    % Build a default message
+    format_to_chars("Expected goal ~q to succeed but it failed.", Goal, Message),
+    assertTrue(Goal, Message).
+
+
+% Assert that the goal fails, reporting the given message if it succeeds.
+assertFalse(Goal, Message) :-
+    call(Goal),
+    !,
+    fail(Message).
+assertFalse(_, _).
+
+% Assert that the goal fails, reporting a default message if it succeeds.
+assertFalse(Goal) :-
+    % Build default message
+    format_to_chars("Expected goal ~q to fail but it succeeded.", Goal, Message),
+    assertFalse(Goal, Message).
+
+
+% Assert that the two terms are equal, reporting the given message if not.
+assertEqual(Expected, Actual, Message) :-
+    % Integer comparison
+    integer(Expected),
+    integer(Actual),
+    assertTrue(Expected =:= Actual, Message),
+    !.
+assertEqual(Expected, Actual, Message) :-
+    % Floating point comparison. (Expected and actual are both numbers but not both integers.)
+    number(Expected),
+    number(Actual),
+    (floatsEqual(Expected, Actual, 10) ; fail(Message)),
+    !.
+assertEqual(Expected, Actual, Message) :-
+    % Term comparison
+    assertTrue(Expected == Actual, Message).
+
+% Assert that the two terms are equal, reporting a default message if not.
+assertEqual(Expected, Actual) :-
+    % Build default message
+    format_to_chars("Expected: ~q Actual: ~q", [Expected, Actual], Message),
+    assertEqual(Expected, Actual, Message).
+
+
+% Compares two floating point numbers using significant digits
+floatsEqual(Expected, Actual, SignificantDigits) :-
+    % Find the places of the first digit of the numbers
+    firstSignificantPlace(Expected, Exponent1),
+    firstSignificantPlace(Actual, Exponent2),
+    % Choose an exponent (the larger exponent means significant digits will be calculated relative to the larger number)
+    Exponent is max(Exponent1, Exponent2),
+    % Compare to within 10^(Exponent - SignificantDigits + 1)
+    Tolerance is 10.0 ^ (Exponent - SignificantDigits + 1),
+    Difference is abs(Expected - Actual),
+    !,
+    Difference < Tolerance.
+
+% Finds the place of the first significant digit of a number
+firstSignificantPlace(Number, 0) :-
+    Number =:= 0,
+    !.
+firstSignificantPlace(Number, Place) :-
+    Place is integer(floor(log10(abs(Number)))).

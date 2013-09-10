@@ -1,0 +1,154 @@
+% Copyright (c) 2011 Aubrey Barnard.  This is free software.  See
+% LICENSE for details.
+
+% Statistical tests of two proportions.
+
+
+% Binomial distribution PDF.
+%
+% Assumes the arguments are valid (NumberSuccesses >= 0, NumberTrials >=
+% NumberSuccesses, 0 =< SuccessProb =< 1).
+% 
+% Here is the math for the following code.
+% B(k; n, p) = n! / (k! * (n - k)!) * p^k * (1 - p)^(n - k) [1]
+% 
+% log(B(k; n, p)) = log(n!) - log(k! * (n - k)!) + log(p^k * (1 - p)^(n - k)) [2]
+% = log(n!) - (log(k!) + log((n - k)!)) + log(p^k) + log((1 - p)^(n - k))
+% = log(n!) - log(k!) - log((n - k)!) + k * log(p) + (n - k) * log(1 - p)
+% = log(gamma(n + 1)) - log(gamma(k + 1)) - log(gamma(n - k + 1)) + k * log(p) + (n - k) * log(1 - p)
+% = lgamma(n + 1) - lgamma(k + 1) - lgamma(n - k + 1) + k * log(p) + (n - k) * log(1 - p)
+% 
+% B(k; n, p) = exp(lgamma(n + 1) - lgamma(k + 1) - lgamma(n - k + 1) + k * log(p) + (n - k) * log(1 - p))
+% 
+% [1] http://en.wikipedia.org/wiki/Binomial_distribution
+% [2] Credit for the log approach goes to SciPy.
+binomial(NumberSuccesses, NumberTrials, SuccessProb, Probability) :-
+    Probability is exp(
+        lgamma(NumberTrials + 1) -
+        lgamma(NumberSuccesses + 1) -
+        lgamma(NumberTrials - NumberSuccesses + 1) +
+        NumberSuccesses * log(SuccessProb) +
+        (NumberTrials - NumberSuccesses) * log(1.0 - SuccessProb)
+    ).
+
+
+% Binomial distribution integral (like CDF, but for arbitrary start and
+% end points).  Uses sums, not incomplete beta function.  End points
+% included.  Assumes arguments are valid (Start >= 0, End >= Start,
+% NumberTrials > 0, 0 =< SuccessProb =< 1).
+
+% This clause exists so that binomial_test_twotailed doesn't have to be
+% more careful about bounds.
+binomial_integral(Start, End, _, _, 0.0) :-
+    integer(Start),
+    integer(End),
+    Start > End,
+    !.
+% All the mass is on zero successes
+binomial_integral(_, _, _, 0.0, 1.0) :-
+    !.
+% All the mass is on all successes
+binomial_integral(_, End, End, 1.0, 1.0) :-
+    !.
+binomial_integral(_, _, _, 1.0, 0.0) :-
+    !.
+% Calculate
+binomial_integral(Start, End, NumberTrials, SuccessProb, ProbabilitySum) :-
+    integer(Start),
+    integer(End),
+    Start =< End,
+    NewEnd is End + 1,
+    binomial_integral_loop(Start, NewEnd, NumberTrials, SuccessProb, 0.0, ProbabilitySum),
+    !.
+binomial_integral_loop(X, X, _, _, P, P).
+binomial_integral_loop(Start, End, NumberTrials, SuccessProb, InitialProbabilitySum, ProbabilitySum) :-
+    binomial(Start, NumberTrials, SuccessProb, PointProbability),
+    NewStart is Start + 1,
+    NewProbabilitySum is InitialProbabilitySum + PointProbability,
+    !,
+    binomial_integral_loop(NewStart, End, NumberTrials, SuccessProb, NewProbabilitySum, ProbabilitySum).
+
+
+% Calculates the p-value for a two-tailed binomial test with the given
+% arguments.
+binomial_test_twotailed(NumberSuccesses, NumberTrials, SuccessProb, PValue) :-
+    % Calculate the effect size and the other limit
+    Mean is SuccessProb * NumberTrials,
+    OppositeSuccesses is 2.0 * Mean - NumberSuccesses,
+    % Sort out which are the left and right limits
+    binomial_test_twotailed_sort_limits(NumberSuccesses, OppositeSuccesses, LeftLimit, RightLimit),
+    % Calculate the values in the tails
+    binomial_integral(0, LeftLimit, NumberTrials, SuccessProb, LeftTail),
+    binomial_integral(RightLimit, NumberTrials, NumberTrials, SuccessProb, RightTail),
+    PValue is LeftTail + RightTail,
+    !.
+binomial_test_twotailed_sort_limits(NumberSuccesses, OppositeSuccesses, LeftLimit, NumberSuccesses) :-
+    OppositeSuccesses < NumberSuccesses,
+    LeftLimit is integer(floor(OppositeSuccesses)).
+binomial_test_twotailed_sort_limits(NumberSuccesses, OppositeSuccesses, NumberSuccesses, RightLimit) :-
+    RightLimit is integer(ceiling(OppositeSuccesses)).
+
+
+% Calculates the p-value for a two-tailed binomial test for the given
+% proportions versus the null hypothesis of equal proportions.
+binomial_test(0, 0, 1.0).
+binomial_test(Proportion1, Proportion2, PValue) :-
+    Total is Proportion1 + Proportion2,
+    binomial_test_twotailed(Proportion1, Total, 0.5, PValue),
+    !.
+
+
+% Calculates the CDF for the chi-square distribution with one degree of
+% freedom.
+% 
+% Here is the math for the following code.
+% gammai is the lower incomplete gamma function
+% chisq_cdf(x; k) = gammai(k / 2, x / 2) / gamma(k / 2) [1]
+% chisq_cdf(x; 1) = gammai(1 / 2, x / 2) / gamma(1 / 2)
+% gammai(1 / 2, x) = sqrt(pi) * erf(sqrt(x)) [2]
+% gamma(1 / 2) = sqrt(pi) [3]
+% chisq_cdf(x; 1) = (sqrt(pi) * erf(sqrt(x / 2))) / sqrt(pi)
+% = erf(sqrt(x / 2))
+% 
+% [1] http://en.wikipedia.org/wiki/Chi-square_distribution
+% [2] http://en.wikipedia.org/wiki/Incomplete_Gamma_function
+% [3] http://en.wikipedia.org/wiki/Gamma_function
+chisquare_cdf_1df(X, Area) :-
+    Area is erf(sqrt(X / 2.0)).
+
+
+% Calculates the complement of the CDF (1 - CDF(x)) for the chi-square
+% distribution with one degree of freedom.
+chisquare_cdfc_1df(X, Area) :-
+    Area is erfc(sqrt(X / 2.0)).
+
+
+% Calculates the p-value for a chi square test for the given proportions
+% versus the null hypothesis of equal proportions.
+chisquare_test(0, 0, 1.0).
+chisquare_test(Proportion1, Proportion2, PValue) :-
+    % Calculate the statistic. Write it out because it's just 2 proportions.
+    % Use 0.5 frequency because that's the null hypothesis.
+    Expected is (Proportion1 + Proportion2) / 2.0,
+    Diff1 is Proportion1 - Expected,
+    Diff2 is Proportion2 - Expected,
+    Statistic is Diff1 * Diff1 / Expected + Diff2 * Diff2 / Expected,
+    % Calculate the p-value
+    chisquare_cdfc_1df(Statistic, PValue),
+    !.
+
+
+% Calculates the p-value for a statistical test of the given proportions
+% versus the null hypothesis of equal proportions.  If the sum of the
+% proportions is greater than 200 a chi-square test is used, otherwise a
+% two-tailed binomial test is used.
+proportion_test(Proportion1, Proportion2, PValue) :-
+    Total is Proportion1 + Proportion2,
+    proportion_test_choose_test(Total, Proportion1, Proportion2, PValue),
+    !.
+proportion_test_choose_test(Total, Proportion1, Proportion2, PValue) :-
+    Total > 200,
+    !,
+    chisquare_test(Proportion1, Proportion2, PValue).
+proportion_test_choose_test(_, Proportion1, Proportion2, PValue) :-
+    binomial_test(Proportion1, Proportion2, PValue).

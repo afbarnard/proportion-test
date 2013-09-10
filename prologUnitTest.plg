@@ -1,0 +1,193 @@
+% Copyright (c) 2010 Aubrey Barnard.  This is free software.  See
+% LICENSE for details.
+
+% Tests prologUnit.plg.
+
+% TODO Test backtracking, especially on assert*
+
+% Imports
+:- use_module('prologUnit.plg').
+
+% Test failing
+testFail :-
+    Message = 'Failure message.',
+    catch((fail(Message), throw(error(assertion('Did not throw exception.')))),
+        error(assertion(Message)),
+        true).
+
+testFail_string :-
+    MessageString = "Failure message.",
+    name(Message, MessageString),
+    catch((fail(Message), throw(error(assertion('Did not throw exception.')))),
+        error(assertion(Message)),
+        true).
+
+testFail_expectedActual :-
+    Message = 'Expected: 1 Actual: error(object)',
+    catch((fail(Message), throw(error(assertion('Did not throw exception.')))),
+        error(assertion(Message)),
+        true).
+
+
+% Test assertTrue
+testAssertTrue_goalSuccess :-
+    assertTrue(true).
+
+testAssertTrue_goalFail :-
+    catch((assertTrue(fail), throw(error(assertion('Did not throw expected exception.')))),
+        error(assertion('Expected goal fail to succeed but it failed.')),
+        true).
+
+testAssertTrueMessage_goalSuccess :-
+    assertTrue(true, 'Success message.').
+
+testAssertTrueMessage_goalFail :-
+    catch((assertTrue(fail, 'Fail message.'), throw(error(assertion('Did not throw expected exception.')))),
+        error(assertion('Fail message.')),
+        true).
+
+
+% Test assertEqual
+testAssertEqual_integers :-
+    EqualMessage = 'equal',
+    assertEqual(601722, 601722, EqualMessage),
+    assertEqual(328173, 328173, EqualMessage),
+    assertEqual(-137712, -137712, EqualMessage),
+    NotEqualMessage = 'not equal',
+    catch((assertEqual(981392, 16917, NotEqualMessage), throw(error(assertion('Did not throw expected exception.')))),
+        error(assertion(NotEqualMessage)),
+        true),
+    catch((assertEqual(37876, -327767, NotEqualMessage), throw(error(assertion('Did not throw expected exception.')))),
+        error(assertion(NotEqualMessage)),
+        true).
+
+testAssertEqual_floats :-
+    EqualMessage = 'equal',
+    assertEqual(-3.5928344180812282, -3.5928344180923393, EqualMessage),
+    assertEqual(6.675920200881265, 6.675920200892376, EqualMessage),
+    NotEqualMessage = 'not equal',
+    catch((assertEqual(-3.6078136700874985, -9.5313622051071363, NotEqualMessage), throw(error(assertion('Did not throw expected exception.')))),
+        error(assertion(NotEqualMessage)),
+        true),
+    catch((assertEqual(-5.9601299165866006, -1.9986410560525041, NotEqualMessage), throw(error(assertion('Did not throw expected exception.')))),
+        error(assertion(NotEqualMessage)),
+        true).
+
+% The following really just tests the floating point equality
+testAssertEqual_numbers :-
+    EqualMessage = 'equal',
+    assertEqual(9.000000000000, 9, EqualMessage),
+    NotEqualMessage = 'not equal',
+    catch((assertEqual(-475, -475.0000001, NotEqualMessage), throw(error(assertion('Did not throw expected exception.')))),
+        error(assertion(NotEqualMessage)),
+        true).
+
+testAssertEqual_terms :-
+    EqualMessage = 'equal',
+    assertEqual(n(1, [n(2, [n(4), n(5, [n(7)])]), n(3, [n(6)])]), n(1, [n(2, [n(4), n(5, [n(7)])]), n(3, [n(6)])]), EqualMessage),
+    NotEqualMessage = 'not equal',
+    catch((assertEqual(n(1, [n(2, [n(4), n(5, [n(7)])]), n(3, [n(6)])]), n(1, [n(2, [n(4), n(5), n(7)]), n(3, [n(6)])]), NotEqualMessage), throw(error(assertion('Did not throw expected exception.')))),
+        error(assertion(NotEqualMessage)),
+        true).
+
+testAssertEqual_message :-
+    catch((assertEqual(714828, 8284.17), throw(error(assertion('Did not throw expected exception.')))),
+        error(assertion(NotEqualMessage1)),
+        true),
+    assertEqual('Expected: 714828 Actual: 8284.17', NotEqualMessage1),
+    catch((assertEqual(car(silver, toyota, 2003), car(green, ford, 1999)), throw(error(assertion('Did not throw expected exception.')))),
+        error(assertion(NotEqualMessage2)),
+        true),
+    assertEqual('Expected: car(silver,toyota,2003) Actual: car(green,ford,1999)', NotEqualMessage2).
+
+
+% Test floatsEqual
+testFloatsEqual :-
+    assertTrue(floatsEqual(1, 1, 100)),
+    assertTrue(floatsEqual(0.94372248428038696, 0.94372248428038696, 16)),
+    assertTrue(floatsEqual(0.32640225283043944, 0.32644354367949205, 4)),
+    assertFalse(floatsEqual(0.32640225283043944, 0.32644354367949205, 5)).
+
+testFloatsEqual_zero :-
+    assertTrue(floatsEqual(0.0, 0.0, 10)),
+    assertTrue(floatsEqual(0.0, 0.00000001, 8)),
+    assertFalse(floatsEqual(0.0, 0.00000001, 9)),
+    assertTrue(floatsEqual(0.000000000001, 0, 12)).
+
+
+% Test firstSignificantPlace
+testFirstSignificantPlace :-
+    unittest:firstSignificantPlace(0, A1),
+    assertEqual(0, A1),
+    unittest:firstSignificantPlace(0.0, A2),
+    assertEqual(0, A2),
+    unittest:firstSignificantPlace(1, A3),
+    assertEqual(0, A3),
+    unittest:firstSignificantPlace(-1, A4),
+    assertEqual(0, A4),
+    unittest:firstSignificantPlace(10, A5),
+    assertEqual(1, A5),
+    unittest:firstSignificantPlace(0.1, A6),
+    assertEqual(-1, A6).
+
+% Test numbers generated with the following Python:
+% place = random.randint(-100, 100); sign = random.choice([1, -1]); random.random() * 10.0 ** place * sign
+testFirstSignificantPlace_random :-
+    unittest:firstSignificantPlace(-4.9865512938205219e+92, A1),
+    assertEqual(92, A1),
+    unittest:firstSignificantPlace(2.5734571803657882e+61, A2),
+    assertEqual(61, A2),
+    unittest:firstSignificantPlace(9.6942718006947794e-44, A3),
+    assertEqual(-44, A3),
+    unittest:firstSignificantPlace(-8.5561001102471526e-83, A4),
+    assertEqual(-83, A4),
+    unittest:firstSignificantPlace(6.140122736774665e-47, A5),
+    assertEqual(-47, A5).
+
+
+% Test runTest's handling of goals
+testRunTest_goalSuccess :-
+    unittest:runTest(noprint, true, Result),
+    assertEqual(result(pass, none), Result).
+
+testRunTest_goalFail :-
+    unittest:runTest(noprint, fail, Result),
+    assertEqual(result(fail, 'Goal failed.'), Result).
+
+testRunTest_assertionError :-
+    unittest:runTest(noprint, throw(error(assertion('assertion error'))), Result),
+    assertEqual(result(fail, 'assertion error'), Result).
+
+testRunTest_unknownError :-
+    unittest:runTest(noprint, throw(error(unknown('unknown error'))), Result),
+    assertEqual(result(error, error(unknown('unknown error'))), Result).
+
+
+% TODO test running tests more thoroughly
+
+
+main :-
+    Tests = [
+        testFail,
+        testFail_string,
+        testFail_expectedActual,
+        testAssertTrue_goalSuccess,
+        testAssertTrue_goalFail,
+        testAssertTrueMessage_goalSuccess,
+        testAssertTrueMessage_goalFail,
+        testAssertEqual_integers,
+        testAssertEqual_floats,
+        testAssertEqual_numbers,
+        testAssertEqual_terms,
+        testAssertEqual_message,
+        testFloatsEqual,
+        testFloatsEqual_zero,
+        testFirstSignificantPlace,
+        testFirstSignificantPlace_random,
+        testRunTest_goalSuccess,
+        testRunTest_goalFail,
+        testRunTest_assertionError,
+        testRunTest_unknownError
+    ],
+    runTests(Tests),
+    halt.
