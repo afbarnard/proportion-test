@@ -6,7 +6,7 @@ Have a look around!  This repository is not an active project so much as
 a dump of some code I was working with a few years ago that might be
 useful or relevant to someone.
 
-The code implements testing an observed proportion against a null
+The Prolog code implements testing an observed proportion against a null
 distribution.  Both binomial and chi-square tests are implemented.  The
 code also includes an experimental/prototypical xUnit testing framework
 for Prolog and a foreign function interface to C implementations of the
@@ -29,5 +29,17 @@ If this sounds like interesting research, let me know.  With the right
 data, there's probably a paper in this somewhere.
 
 
-Copyright (c) 2013 Aubrey Barnard.  This is free software.  See
+Contents
+--------
+
+* Binomial distribution probability mass function (PMF)
+* Binomial cumulative distribution function (CDF)
+* Two-tailed binomial test
+* Chi-square cumulative distribution function (CDF), 1 degree of freedom
+* Chi-square test, 1 degree of freedom
+* Proportion test function that chooses appropriate statistical test
+* Basic Prolog xUnit testing framework
+
+
+Copyright (c) 2014 Aubrey Barnard.  This is free software.  See
 LICENSE for details.
